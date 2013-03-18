@@ -1,0 +1,4 @@
+*.pyc
+dbsettings.py
+.nfs*
+*.db
