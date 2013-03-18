@@ -1,0 +1,15 @@
+{% extends "layout.html" %}
+{% block body %}
+    {% if linked %}
+        <p>Connected to {{ userInfo }}'s Dropbox account</p>
+        <ul class=files>
+        {%  for file in metadata['contents'] %}
+            <li>{{ file['path'] }}</li>
+        {% else %}
+            <li>No files currently stored in app folder..</li>
+        {% endfor %}
+        </ul>
+    {% else %}
+    <p>No Dropbox account connected. Please connect your dropbox account by going <a href="{{ loginUrl }}">here</a></p>
+    {%  endif %}
+{% endblock %}

@@ -1,82 +1,66 @@
 from __future__ import with_statement
-import sqlite3
-from contextlib import closing
-from dropbox import client, rest, session
+import sys
 from flask import Flask, request, session, g, redirect, url_for, \
     abort, render_template, flash
+from werkzeug import utils
+from flask.ext.dropbox import Dropbox, DropboxBlueprint
 
-#Dropbox configuration file
 import dbsettings
 
-#Configuration - this should live in a separate file, but for a
-#small app this is fine
-DATABASE = '/home/jcerise06/flaskr/flaskr.db'
-DEBUG = True
-SECRET_KEY = 'development key'
-USERNAME = 'admin'
-PASSWORD = 'default'
 
-#Initialize the application
 app = Flask(__name__)
-app.config.from_object(__name__)
-app.config.from_envvar('FLASKR_SETTINGS', silent=True)
+app.config.from_object(dbsettings)
 
-#Intialize Dropbox sessions and request token
-sess = session.DropboxSession(APP_KEY, APP_SECRET, ACCESS_TYPE)
-request_token = sess.obtain_request_token()
+dropbox = Dropbox(app)
+dropbox.register_blueprint(url_prefix='/dropbox')
 
-def connect_db():
-    return sqlite3.connect(app.config['DATABASE'])
-
-def init_db():
-    with closing(connect_db()) as db:
-        with app.open_resource('schema.sql') as f:
-            db.cursor().executescript(f.read())
-        db.commit()
-
-@app.before_request
-def before_request():
-    g.db = connect_db()
-
-@app.teardown_request
-def teardown_request(exception):
-    g.db.close()
 
 @app.route('/')
-def show_entries():
-    cur = g.db.execute('select title, text from entries order by id desc')
-    entries = [dict(title=row[0], text=row[1]) for row in cur.fetchall()]
-    return render_template('show_entries.html', entries=entries)
+def home():
+    loginUrl = ''
+    userInfo = ''
+    metadata = ''
 
-@app.route('/add', methods=['POST'])
-def add_entry():
-    if not session.get('logged_in'):
-        abort(401)
-    g.db.execute('insert into entries (title, text) values (?, ?)',
-            [request.form['title'], request.form['text']])
-    g.db.commit()
-    flash('New entry was successfully posted!')
-    return redirect(url_for('show_entries'))
+    linked = dropbox.session.is_linked()
+    sys.stdout.write(str(linked))
+    if not linked:
+        loginUrl = dropbox.login_url
+    else:
+        client = dropbox.client
+        userInfo = client.account_info()['display_name']
+        sys.stdout.write(userInfo[1])
+        metadata = client.metadata('/')
 
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    error = None
-    if request.method ==  'POST':
-        if request.form['username'] != app.config['USERNAME']:
-            erro = 'Invalid Username'
-        elif request.form['password'] != app.config['PASSWORD']:
-            error = 'Invalid Password'
-        else:
-            session['logged_in'] = True
-            flash('You were successfully logged in!')
-            return redirect(url_for('show_entries'))
-    return render_template('login.html', error=error)
+    return render_template('list_galleries.html', linked=linked, loginUrl=loginUrl, userInfo=userInfo, metadata=metadata)
 
-@app.route('/logout')
-def logout():
-    session.pop('logged_in', None)
-    flash('You were logged out!')
-    return redirect(url_for('show_entries'))
+
+@app.route('/success/<path:filename>')
+def success(filename):
+    return u'File successfully uploaded as /%s' % filename
+
+
+@app.route('/upload', methods=('GET', 'POST'))
+def upload():
+    if not dropbox.is_authenticated:
+        return redirect(url_for('home'))
+
+    if request.method == 'POST':
+        file_obj = request.files['file']
+
+        if file_obj:
+            client = dropbox.client
+            filename = utils.secure_filename(file_obj.filename)
+
+            # Actual uploading process
+            result = client.put_file('/' + filename, file_obj.read())
+
+            path = result['path'].lstrip('/')
+            return redirect(url_for('success', filename=path))
+
+    return u'<form action="" method="post" enctype="multipart/form-data">' \
+           u'<input name="file" type="file">' \
+           u'<input type="submit" value="Upload">' \
+           u'</form>'
 
 if __name__ == '__main__':
     app.run()

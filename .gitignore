@@ -2,3 +2,5 @@
 dbsettings.py
 .nfs*
 *.db
+.idea/*
+.idea
