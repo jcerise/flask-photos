@@ -5,6 +5,11 @@
     <h1>CumulusPhoto</h1>
     {% for message in get_flashed_messages() %}
     <div class="flash">{{ message }}</div>
+    {% if session.logged_in %}
+    <div class="user-navigation">
+        <a href="#">Administration</a> | <a href="#">Upload New Photos</a> | <a href="logout">Logout</a>
+    </div>
+    {%  endif %}
     {% endfor %}
     {% block body %}{% endblock %}
 </div>
